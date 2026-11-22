@@ -11,9 +11,13 @@ Canonical docs — read these before proposing changes, and use their terms exac
 
 - [`CLAUDE.md`](CLAUDE.md) — module layout, brakes, testing, working agreement.
 - [`docs/factory/SPEC.md`](docs/factory/SPEC.md) — the factory (pipeline + brakes + testing).
-- [`docs/factory/RUNBOOK.md`](docs/factory/RUNBOOK.md) — operate, set up, debug.
+- [`docs/factory/RUNBOOK.md`](docs/factory/RUNBOOK.md) — operate and debug this factory.
 - [`GLOSSARY.md`](GLOSSARY.md) — this repo's vocabulary (shared terms: the home repo).
 - [`docs/adr/`](docs/adr/) — Architecture Decision Records.
+
+## Part of a multi-repo factory
+
+This repo is the **infrastructure** half of a three-repo setup. Shared agent skills, vocabulary, and the cross-repo setup guide live in the **home repo** ([`software-factory-example-home-repo`](https://github.com/EduardBargues/software-factory-example-home-repo)) — run *cross-repo* agent sessions from there, and see its [`NEW-REPO-CHECKLIST`](https://github.com/EduardBargues/software-factory-example-home-repo/blob/main/docs/factory/NEW-REPO-CHECKLIST.md) to stand up a new factory repo. The consumer is the app repo, [`software-factory-example-python`](https://github.com/EduardBargues/software-factory-example-python).
 
 ## Consuming the module
 
