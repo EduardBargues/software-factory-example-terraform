@@ -1,7 +1,7 @@
 # Terratest end-to-end tests
 
 Go-based real-apply tests (Gruntwork [Terratest](https://terratest.gruntwork.io/)).
-Each test applies an `examples/` instance against the **sandbox** AWS account,
+Each test applies an `examples/` instance against the **testing** environment,
 asserts real behavior via the AWS SDK, and **destroys** it — whether the test
 passes or fails.
 
@@ -40,5 +40,5 @@ func TestAppLambdaWebapp(t *testing.T) {
 3. Commit through the brakes. Trigger it on a PR by adding the `run-e2e` label.
 
 Keep each test's resources uniquely named (random suffix) so concurrent runs don't
-collide, and rely on the sandbox reaper to sweep anything a failed `destroy` leaks
+collide, and rely on the reaper to sweep anything a failed `destroy` leaks
 (see `docs/factory/RUNBOOK.md`).

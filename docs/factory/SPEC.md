@@ -22,7 +22,7 @@ destroys it. See [`docs/adr/0001`](../adr/0001-public-private-module-contract.md
 | **implement** | `agent:implement` | write | builds the change, commits through the brakes, opens a draft PR, applies `agent:review` |
 | **review** | `agent:review` (PR) | write | two-axis review (standards + spec), fixes what's safe, marks ready |
 | **human merge** | — | human | the v1 gate that always stays manned |
-| **run-e2e** | `run-e2e` (PR) | write (cloud) | ephemeral real-apply + Terratest in the sandbox, then destroy |
+| **run-e2e** | `run-e2e` (PR) | write (cloud) | ephemeral real-apply + Terratest in testing, then destroy |
 | **morning-rebase** | daily / `agent:rebase` | — | keep open PRs rebased onto main |
 
 Auth and prompt-injection defenses are identical to the app repo: a single
@@ -49,7 +49,7 @@ The agent commits **through** these (never `--no-verify`) and must not edit
 ## Testing layers
 
 - **Native tests** (`modules/*/tests/*.tftest.hcl`, `command = plan` + mocks) — the per-PR gate. Fast, no creds.
-- **Terratest** (`test/*_test.go`) — real **ephemeral** apply of an `examples/` instance, assert via AWS SDK, destroy. On-demand only via the `run-e2e` label; OIDC short-lived creds into a scoped role in a dedicated **sandbox** account. Not a default merge gate; never scheduled.
+- **Terratest** (`test/*_test.go`) — real **ephemeral** apply of an `examples/` instance, assert via AWS SDK, destroy. On-demand only via the `run-e2e` label; OIDC short-lived creds into the scoped `terraform-testing` role. Not a default merge gate; never scheduled.
 
 ## Module contract & distribution
 
