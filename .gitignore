@@ -1,0 +1,37 @@
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Go (Terratest)
+test/vendor/
+
+# Shared skills are loaded at CI time from the home repo (ADR-0002), never committed here
+.claude/skills/
+
+# Matt Pocock course skills (behind pay-wall) + local Claude config
+.claude/skills/course-*
+.claude/settings.local.json
+
+# AWS / secrets — never commit
+.env
+.env.*
+*.pem
+aws.json
+credentials
+
+# Factory runtime scratch (the staged ticket/diff a task reads) — never committed
+.factory/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/

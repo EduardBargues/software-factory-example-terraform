@@ -1,0 +1,52 @@
+name: brakes
+
+# Runs the same brakes as pre-commit, so a commit can never dodge them with
+# --no-verify, plus the native `terraform test` (plan + mock_provider) layer.
+# Required to pass before merge once branch protection is on. Credential-free:
+# nothing here touches a real cloud — real-apply e2e is the separate run-e2e job.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: brakes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  brakes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0 # full history so secret scanning can see all commits
+
+      - name: Install the brake toolchain
+        uses: ./.github/actions/setup-iac-brakes
+
+      - name: Run the static brakes
+        run: pre-commit run --all-files --show-diff-on-failure
+
+      # Native `terraform test` with mock_provider — fast, no cloud credentials.
+      # Runs for every module that ships tests; a no-op while the repo is module-empty.
+      - name: Native terraform test (plan + mocks)
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          found=0
+          for dir in modules/public/* modules/private/*; do
+            [ -d "$dir/tests" ] || continue
+            tests=("$dir"/tests/*.tftest.hcl)
+            [ ${#tests[@]} -gt 0 ] || continue
+            found=1
+            echo "::group::terraform test — $dir"
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" test
+            echo "::endgroup::"
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "No *.tftest.hcl found yet — skipping native tests (module-empty repo)."
+          fi

@@ -1,0 +1,35 @@
+# load-shared-skills — bring the home repo's shared skills into the working tree.
+# The home repo is the single source of truth for skills (home-repo ADR-0002).
+# This repo's CI has only its own checkout, so before an agent runs we clone the
+# home repo at the PINNED ref recorded in skills-lock.json and copy its skills
+# into .claude/skills/ (ephemeral, never committed). The home repo is PUBLIC, so
+# no token is needed. Bumping the pin is a PR through the normal brakes.
+name: load-shared-skills
+description: Check out the home repo at the pinned ref and copy its shared skills into the working tree.
+
+runs:
+  using: composite
+  steps:
+    - name: Load shared skills from the home repo
+      shell: bash
+      run: |
+        set -euo pipefail
+        [ -f skills-lock.json ] || { echo "::error::skills-lock.json missing"; exit 1; }
+        repo="$(jq -r '.homeRepo.repo' skills-lock.json)"
+        ref="$(jq -r '.homeRepo.ref' skills-lock.json)"
+        [ -n "$repo" ] && [ "$repo" != "null" ] || { echo "::error::homeRepo.repo not set in skills-lock.json"; exit 1; }
+        [ -n "$ref" ] && [ "$ref" != "null" ] || { echo "::error::homeRepo.ref not set in skills-lock.json"; exit 1; }
+
+        tmp="$(mktemp -d)"
+        # Fetch exactly the pinned ref (tag, branch, or SHA) from the public home repo.
+        git -C "$tmp" init -q
+        git -C "$tmp" remote add origin "https://github.com/${repo}.git"
+        git -C "$tmp" fetch -q --depth 1 origin "$ref"
+        git -C "$tmp" checkout -q FETCH_HEAD
+
+        if [ ! -d "$tmp/.claude/skills" ]; then
+          echo "::error::home repo ${repo}@${ref} has no .claude/skills"; exit 1
+        fi
+        mkdir -p .claude/skills
+        cp -R "$tmp/.claude/skills/." .claude/skills/
+        echo "Loaded shared skills from ${repo}@${ref} ($(ls -1 .claude/skills | wc -l | tr -d ' ') skills)"

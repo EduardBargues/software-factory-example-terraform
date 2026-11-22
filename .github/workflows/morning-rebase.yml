@@ -1,0 +1,94 @@
+# morning-rebase — keep open PRs fresh.
+# Once a day, rebase every open PR onto its base branch and force-push with lease.
+# PRs stay merge-ready, and each PR's `brakes` CI re-runs against current main.
+# You can also rebase ONE PR on demand by adding the `agent:rebase` label to it.
+# Pure git — no agent (determinism first).
+#
+# The push uses FACTORY_PAT (not GITHUB_TOKEN) so the rebased branch re-triggers
+# the PR's own CI. A conflict never force-merges: the run aborts that rebase,
+# leaves the branch untouched, and comments so a human rebases it by hand.
+name: morning-rebase
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 06:00 UTC daily (adjust to your morning)
+  workflow_dispatch: {}
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: morning-rebase
+  cancel-in-progress: false
+
+jobs:
+  rebase:
+    # Scheduled/manual runs rebase all PRs; a labeled run fires only for agent:rebase.
+    if: github.event_name != 'pull_request' || github.event.label.name == 'agent:rebase'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Authorize the labeler
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const actor = context.payload.sender.login;
+            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner, repo: context.repo.repo, username: actor,
+            });
+            const role = data.role_name || data.permission;
+            core.info(`labeler=${actor} role=${role}`);
+            if (!["admin", "maintain", "write", "triage"].includes(role)) {
+              core.setFailed(`${actor} lacks triage+ permission; refusing to run the factory.`);
+            }
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase open PRs onto their base
+        env:
+          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          FACTORY_PAT: ${{ secrets.FACTORY_PAT }}
+          REPO: ${{ github.repository }}
+          LABELED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || '' }}
+        run: |
+          set -uo pipefail
+          git config user.name "software-factory"
+          git config user.email "software-factory@users.noreply.github.com"
+          auth="https://x-access-token:${FACTORY_PAT}@github.com/${REPO}.git"
+
+          if [ -n "${LABELED_PR:-}" ]; then
+            prs="$LABELED_PR"
+          else
+            prs="$(gh pr list --repo "$REPO" --state open --json number --jq '.[].number')"
+          fi
+          if [ -z "$prs" ]; then echo "No open PRs. Nothing to rebase."; exit 0; fi
+
+          for pr in $prs; do
+            read -r head base cross < <(gh pr view "$pr" --repo "$REPO" \
+              --json headRefName,baseRefName,isCrossRepository \
+              --jq '[.headRefName, .baseRefName, .isCrossRepository] | @tsv')
+            if [ "$cross" = "true" ]; then echo "skip #$pr (fork PR)"; continue; fi
+
+            git fetch --no-tags origin "$head" "$base"
+            git checkout -B "$head" "origin/$head"
+
+            if [ "$(git rev-parse HEAD)" = "$(git merge-base HEAD "origin/$base")" ]; then
+              echo "skip #$pr ($head already on $base)"; continue
+            fi
+
+            if git rebase "origin/$base"; then
+              git push --force-with-lease "$auth" "HEAD:refs/heads/$head" \
+                && echo "rebased #$pr ($head onto $base)"
+            else
+              git rebase --abort || true
+              echo "::warning::#$pr ($head) conflicts with $base — left untouched"
+              gh pr comment "$pr" --repo "$REPO" \
+                --body "\`morning-rebase\`: skipped — rebasing onto \`$base\` hit a conflict. Please rebase this branch by hand." || true
+            fi
+          done

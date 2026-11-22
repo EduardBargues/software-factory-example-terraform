@@ -1,0 +1,118 @@
+# The factory's single swappable agent definition.
+# Every task invokes the harness through here, so changing the model, CLI, or
+# auth is a one-file change. v1 harness: the Claude Code CLI run headless
+# (`claude -p`), authenticated via GitHub OIDC -> Anthropic Workload Identity
+# Federation. No long-lived credential is stored anywhere: GitHub mints a
+# short-lived OIDC token per run, and the CLI exchanges it for a short-lived
+# Claude token scoped to this repo. The workflow must grant `id-token: write`.
+name: run-agent
+description: Run the factory's agent harness (claude -p) with a prompt and return its final text.
+
+inputs:
+  prompt:
+    description: The task prompt for the agent (trusted; never interpolate untrusted issue text here).
+    required: true
+  # Federation identifiers (NOT credentials): useless without a valid GitHub OIDC
+  # token from this repo. Passed from repo secrets only to keep the Anthropic org
+  # out of the public repo, not because possessing them grants access.
+  federation-rule-id:
+    description: Anthropic WIF federation rule id (fdrl_...).
+    required: true
+  organization-id:
+    description: Anthropic organization id (UUID).
+    required: true
+  service-account-id:
+    description: Anthropic service account id (svac_...) the minted token acts as.
+    required: true
+  workspace-id:
+    description: Anthropic workspace id (wrkspc_...) the token is scoped to.
+    required: true
+  model:
+    description: Model id to pin. Explore defaults to Sonnet (frequent, read-only).
+    required: false
+    default: claude-sonnet-4-6
+  allowed-tools:
+    description: Space-separated tools the agent may use.
+    required: false
+    default: Read Grep Glob
+  disallowed-tools:
+    description: Space-separated tools the agent must never use.
+    required: false
+    default: Bash Edit Write WebFetch WebSearch NotebookEdit
+  permission-mode:
+    description: Claude Code permission mode. `plan` enforces read-only.
+    required: false
+    default: plan
+
+outputs:
+  response:
+    description: The agent's final text response.
+    value: ${{ steps.agent.outputs.response }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install the Claude Code CLI
+      shell: bash
+      run: npm install -g @anthropic-ai/claude-code@2.1.191
+
+    - name: Mint a GitHub OIDC token for Anthropic
+      shell: bash
+      env:
+        OIDC_AUDIENCE: https://api.anthropic.com
+      run: |
+        set -euo pipefail
+        # Requires the job's `id-token: write` permission; the runner then provides
+        # the request token/url env vars used below.
+        tokfile="$(mktemp)"
+        curl -sS -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+          "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}" \
+          | jq -r '.value' > "$tokfile"
+        [ -s "$tokfile" ] || { echo "::error::failed to mint GitHub OIDC token"; exit 1; }
+        echo "ANTHROPIC_IDENTITY_TOKEN_FILE=$tokfile" >> "$GITHUB_ENV"
+
+    - id: agent
+      shell: bash
+      env:
+        # With these set and no ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN, the CLI
+        # exchanges the OIDC token (ANTHROPIC_IDENTITY_TOKEN_FILE, exported above)
+        # for a short-lived Claude token and refreshes it as needed.
+        ANTHROPIC_FEDERATION_RULE_ID: ${{ inputs.federation-rule-id }}
+        ANTHROPIC_ORGANIZATION_ID: ${{ inputs.organization-id }}
+        ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ inputs.service-account-id }}
+        ANTHROPIC_WORKSPACE_ID: ${{ inputs.workspace-id }}
+        AGENT_PROMPT: ${{ inputs.prompt }}
+        AGENT_MODEL: ${{ inputs.model }}
+        AGENT_ALLOWED: ${{ inputs.allowed-tools }}
+        AGENT_DISALLOWED: ${{ inputs.disallowed-tools }}
+        AGENT_PERM: ${{ inputs.permission-mode }}
+      run: |
+        set -uo pipefail
+        # Precedence foot-gun: a static credential (even empty) shadows federation.
+        unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN || true
+        # Capture stdout/stderr to files (not a swallowing $()) so a failure is
+        # visible in the logs instead of a black box. Drop `set -e` for the call
+        # and handle the exit code ourselves.
+        out="$(mktemp)"; err="$(mktemp)"
+        claude -p "$AGENT_PROMPT" \
+          --model "$AGENT_MODEL" \
+          --permission-mode "$AGENT_PERM" \
+          --allowedTools "$AGENT_ALLOWED" \
+          --disallowedTools "$AGENT_DISALLOWED" \
+          --output-format text >"$out" 2>"$err"
+        rc=$?
+        if [ "$rc" -ne 0 ]; then
+          # Surface what claude emitted, redacting any short-lived token.
+          redact='s/sk-ant-[A-Za-z0-9_-]*/<redacted>/g'
+          echo "::group::claude stderr"; sed -E "$redact" "$err" >&2; echo "::endgroup::"
+          echo "::group::claude stdout"; sed -E "$redact" "$out"; echo "::endgroup::"
+          echo "::error::claude -p exited $rc"
+        fi
+        # Always publish whatever text we got, so a downstream step can use it (or fall back).
+        {
+          echo "response<<__RUNAGENT_EOF__"
+          cat "$out"
+          echo
+          echo "__RUNAGENT_EOF__"
+        } >> "$GITHUB_OUTPUT"
+        exit "$rc"

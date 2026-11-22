@@ -1,0 +1,43 @@
+# setup-iac-brakes — install the Terraform factory's brake toolchain.
+# These binaries back the pre-commit hooks (fmt/validate/tflint/checkov) and the
+# native `terraform test` job. pre-commit and checkov are Python tools.
+#
+# NOTE (supply-chain hardening): the third-party setup actions below are pinned to
+# version tags for readability. Before going live, pin each to a full commit SHA
+# (as .github/actions/run-agent and the workflows pin checkout/github-script) and
+# keep them current — see docs/factory/RUNBOOK.md.
+name: setup-iac-brakes
+description: Install Terraform, tflint, Checkov, and pre-commit so the IaC brakes can run.
+
+inputs:
+  terraform-version:
+    description: Terraform version to install (>= 1.7 for mock_provider in native tests).
+    required: false
+    default: "1.9.8"
+  tflint-version:
+    description: tflint version to install.
+    required: false
+    default: "v0.54.0"
+
+runs:
+  using: composite
+  steps:
+    - name: Install Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.terraform-version }}
+        terraform_wrapper: false # hooks call the real `terraform` binary
+
+    - name: Install tflint
+      uses: terraform-linters/setup-tflint@v4
+      with:
+        tflint_version: ${{ inputs.tflint-version }}
+
+    - name: Install Python (for pre-commit + Checkov)
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install pre-commit and Checkov
+      shell: bash
+      run: pip install --no-cache-dir pre-commit checkov

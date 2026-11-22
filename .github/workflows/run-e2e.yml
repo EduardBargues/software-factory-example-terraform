@@ -1,0 +1,94 @@
+# run-e2e — on-demand real-apply end-to-end tests (Terratest).
+# Triggered by applying the `run-e2e` label to a PR (a triage+ collaborator only).
+# This is the ONLY workflow that touches a real cloud: it applies the examples
+# EPHEMERALLY in a dedicated SANDBOX AWS account, asserts real behavior, and
+# destroys — via GitHub OIDC short-lived credentials (no long-lived keys). It is
+# NOT a merge gate by default and never runs on a schedule (see ADR + SPEC).
+name: run-e2e
+
+on:
+  pull_request:
+    types: [labeled]
+
+# id-token: write mints the GitHub OIDC token exchanged for short-lived AWS creds.
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+concurrency:
+  group: run-e2e-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    if: github.event.label.name == 'run-e2e'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      AWS_REGION: ${{ vars.AWS_SANDBOX_REGION || 'eu-west-1' }}
+    steps:
+      - name: Authorize the labeler
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const actor = context.payload.sender.login;
+            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner, repo: context.repo.repo, username: actor,
+            });
+            const role = data.role_name || data.permission;
+            core.info(`labeler=${actor} role=${role}`);
+            if (!["admin", "maintain", "write", "triage"].includes(role)) {
+              core.setFailed(`${actor} lacks triage+ permission; refusing to run e2e.`);
+            }
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      # Keyless AWS auth: assume a scoped, least-privilege role in the sandbox account
+      # via OIDC. The role trust policy must be constrained to this repo (sub claim).
+      - name: Configure AWS credentials (OIDC, sandbox)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_SANDBOX_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-duration-seconds: 3600
+
+      - name: Terratest (ephemeral apply -> assert -> destroy)
+        id: e2e
+        working-directory: test
+        run: |
+          set -euo pipefail
+          if ! ls ./*_test.go >/dev/null 2>&1; then
+            echo "No Terratest cases yet — nothing to run (module-empty repo)."
+            exit 0
+          fi
+          go test ./... -v -timeout 45m
+
+      - name: Report result on the PR
+        if: always()
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          OUTCOME: ${{ steps.e2e.outcome }}
+        with:
+          script: |
+            const outcome = process.env.OUTCOME || "unknown";
+            const body = `**run-e2e** (ephemeral apply in the sandbox): \`${outcome}\`. See this run's Actions logs for details. Resources were destroyed on completion.`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.issue.number, body,
+            });
