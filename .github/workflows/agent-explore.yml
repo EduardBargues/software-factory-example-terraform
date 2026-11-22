@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 1
 
       # Bring the shared skills from the home repo into the working tree (ADR-0002).
-      - uses: ./.github/actions/load-shared-skills
+      - uses: EduardBargues/software-factory-example-home-repo/.github/actions/load-shared-skills@v0.1.0
 
       # Prompt-injection defense: the untrusted issue text is written to a file via
       # env vars — never interpolated into the workflow or the prompt.
@@ -66,7 +66,7 @@ jobs:
 
       - name: Explore
         id: explore
-        uses: ./.github/actions/run-agent
+        uses: EduardBargues/software-factory-example-home-repo/.github/actions/run-agent@v0.1.0
         with:
           federation-rule-id: ${{ secrets.ANTHROPIC_FEDERATION_RULE_ID }}
           organization-id: ${{ secrets.ANTHROPIC_ORGANIZATION_ID }}
