@@ -1,5 +1,7 @@
 # software-factory-example-terraform
 
+*One public Terraform module (`modules/public/app`), built and tested by its own software factory.*
+
 A Terraform **module library**, built and tested by its own software factory — the
 infrastructure half of a multi-repo software-factory setup. It exposes **one public
 module** (`modules/public/app`) consumed by
