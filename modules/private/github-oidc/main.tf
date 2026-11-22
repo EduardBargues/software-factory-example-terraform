@@ -26,8 +26,6 @@ provider "aws" {
   region = var.region
 }
 
-data "aws_caller_identity" "current" {}
-
 # ── GitHub OIDC identity provider (one per account) ───────────────────────────
 # Fetch GitHub's current CA fingerprint rather than hardcoding a thumbprint.
 data "tls_certificate" "github" {
@@ -94,6 +92,12 @@ resource "aws_iam_role" "env" {
 # accounts for a hard boundary. Every resource a run creates MUST carry
 # tags = { environment = "<env>" } or the create is denied.
 resource "aws_iam_role_policy" "env" {
+  # The broad grant below is INTENTIONAL: admin scoped to the environment tag
+  # (ABAC), with the env tag as the only boundary (see README). These Checkov
+  # checks are accepted knowingly — tighten production later if warranted.
+  #checkov:skip=CKV_AWS_62:Intentional admin-within-environment-tag (ABAC); boundary is the env tag
+  #checkov:skip=CKV_AWS_63:Action "*" is deliberate and gated by aws:ResourceTag/RequestTag environment
+  #checkov:skip=CKV2_AWS_40:Full IAM is deliberate and env-tag-scoped; needed to manage the function execution role
   for_each = var.environments
 
   name = "admin-${each.key}"
