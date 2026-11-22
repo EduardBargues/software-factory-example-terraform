@@ -1,5 +1,7 @@
 # software-factory-example-terraform
 
+*Terraform module library: one public module (`modules/public/app`), ephemeral apply, no persistent state.*
+
 A Terraform **module library**, built and tested by its own software factory — the
 infrastructure half of a multi-repo software-factory setup. It exposes **one public
 module** (`modules/public/app`) consumed by
