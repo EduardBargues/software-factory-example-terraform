@@ -1,44 +1,16 @@
-# auto-label — the factory's entry gate.
-# When a COLLABORATOR opens an issue, apply `agent:explore` so the pipeline starts.
-# Issues from non-collaborators are ignored (a clean no-op): FACTORY_PAT is reached
-# only after the author passes the triage+ check. The label is applied via
-# FACTORY_PAT so the `labeled` event triggers agent-explore (a GITHUB_TOKEN-applied
-# label does not fire downstream workflows).
+# auto-label (thin caller) — the factory's entry gate.
+# The shared logic lives in the hub's reusable workflow (ADR-0003), pinned by tag.
 name: auto-label
 
 on:
   issues:
     types: [opened]
 
+# Caps the token the reusable workflow receives (it uses FACTORY_PAT for the write).
 permissions:
   contents: read
 
-concurrency:
-  group: auto-label-${{ github.event.issue.number }}
-  cancel-in-progress: false
-
 jobs:
   gate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Check the issue author is a collaborator
-        id: check
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
-        with:
-          script: |
-            const author = context.payload.issue.user.login;
-            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
-              owner: context.repo.owner, repo: context.repo.repo, username: author,
-            });
-            const role = data.role_name || data.permission;
-            const enter = ["admin", "maintain", "write", "triage"].includes(role);
-            core.info(`author=${author} role=${role} enter=${enter}`);
-            core.setOutput("enter", enter ? "true" : "false");
-
-      - name: Apply agent:explore
-        if: steps.check.outputs.enter == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: gh issue edit "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --add-label "agent:explore"
+    uses: EduardBargues/software-factory-example-home-repo/.github/workflows/auto-label.yml@v0.1.0
+    secrets: inherit

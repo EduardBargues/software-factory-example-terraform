@@ -59,7 +59,7 @@ jobs:
           git fetch --no-tags origin main
           echo "BASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
-      - uses: ./.github/actions/load-shared-skills
+      - uses: EduardBargues/software-factory-example-home-repo/.github/actions/load-shared-skills@v0.1.0
 
       - name: Install the brakes (so the agent commits fixes through pre-commit)
         uses: ./.github/actions/setup-iac-brakes
@@ -97,7 +97,7 @@ jobs:
 
       - name: Review
         id: review
-        uses: ./.github/actions/run-agent
+        uses: EduardBargues/software-factory-example-home-repo/.github/actions/run-agent@v0.1.0
         with:
           federation-rule-id: ${{ secrets.ANTHROPIC_FEDERATION_RULE_ID }}
           organization-id: ${{ secrets.ANTHROPIC_ORGANIZATION_ID }}
