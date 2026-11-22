@@ -12,6 +12,11 @@ on:
 permissions:
   contents: read
 
+# Make pip (pre-commit's python hooks + Checkov) use the repo-local public-PyPI
+# config instead of any corporate proxy with an expiring token.
+env:
+  PIP_CONFIG_FILE: ${{ github.workspace }}/.config/pip/pip.conf
+
 concurrency:
   group: brakes-${{ github.ref }}
   cancel-in-progress: true

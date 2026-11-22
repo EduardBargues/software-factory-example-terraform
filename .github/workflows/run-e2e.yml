@@ -1,7 +1,7 @@
 # run-e2e — on-demand real-apply end-to-end tests (Terratest).
 # Triggered by applying the `run-e2e` label to a PR (a triage+ collaborator only).
 # This is the ONLY workflow that touches a real cloud: it applies the examples
-# EPHEMERALLY in a dedicated SANDBOX AWS account, asserts real behavior, and
+# EPHEMERALLY in the testing environment (resources tagged environment=testing), asserts real behavior, and
 # destroys — via GitHub OIDC short-lived credentials (no long-lived keys). It is
 # NOT a merge gate by default and never runs on a schedule (see ADR + SPEC).
 name: run-e2e
@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      AWS_REGION: ${{ vars.AWS_SANDBOX_REGION || 'eu-west-1' }}
+      AWS_REGION: ${{ vars.AWS_TESTING_REGION || 'eu-west-1' }}
     steps:
       - name: Authorize the labeler
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
@@ -59,12 +59,12 @@ jobs:
         with:
           go-version: "1.26"
 
-      # Keyless AWS auth: assume a scoped, least-privilege role in the sandbox account
+      # Keyless AWS auth: assume a scoped, least-privilege `terraform-testing` role
       # via OIDC. The role trust policy must be constrained to this repo (sub claim).
-      - name: Configure AWS credentials (OIDC, sandbox)
+      - name: Configure AWS credentials (OIDC, testing)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_SANDBOX_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_TESTING_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-duration-seconds: 3600
 
@@ -87,7 +87,7 @@ jobs:
         with:
           script: |
             const outcome = process.env.OUTCOME || "unknown";
-            const body = `**run-e2e** (ephemeral apply in the sandbox): \`${outcome}\`. See this run's Actions logs for details. Resources were destroyed on completion.`;
+            const body = `**run-e2e** (ephemeral apply in testing): \`${outcome}\`. See this run's Actions logs for details. Resources were destroyed on completion.`;
             await github.rest.issues.createComment({
               owner: context.repo.owner, repo: context.repo.repo,
               issue_number: context.issue.number, body,

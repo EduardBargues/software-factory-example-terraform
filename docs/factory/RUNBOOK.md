@@ -14,26 +14,44 @@ Set these once the repo is on GitHub (Phase D). **No long-lived cloud keys** —
 
 - `FACTORY_PAT` — fine-grained, single-repo, expiring PAT. Lets tasks apply labels / open PRs so downstream workflows fire (the built-in `GITHUB_TOKEN` can't).
 - `ANTHROPIC_FEDERATION_RULE_ID`, `ANTHROPIC_ORGANIZATION_ID`, `ANTHROPIC_SERVICE_ACCOUNT_ID`, `ANTHROPIC_WORKSPACE_ID` — Anthropic WIF identifiers (not credentials; useless without a valid GitHub OIDC token from this repo).
-- `AWS_SANDBOX_ROLE_ARN` — the IAM role `run-e2e` assumes via OIDC in the sandbox account.
+- `AWS_TESTING_ROLE_ARN` — the IAM role `run-e2e` assumes via OIDC (may only touch resources tagged environment=testing).
 
 **Variables**
 
-- `AWS_SANDBOX_REGION` — region for ephemeral e2e (defaults to `eu-west-1`).
+- `AWS_TESTING_REGION` — region for ephemeral e2e (defaults to `eu-west-1`).
 
-## Sandbox AWS account (for run-e2e)
+## Environments & OIDC roles (for run-e2e and deploy)
 
-1. Use a **dedicated** account, isolated from prod/staging.
-2. Create a GitHub OIDC identity provider + an IAM role whose trust policy is constrained to this repo's `sub` claim (`repo:EduardBargues/software-factory-example-terraform:*`).
-3. Scope the role to **least privilege** — only the services the examples create (e.g. Lambda, IAM for the function role, CloudWatch Logs, DynamoDB, EventBridge as modules land).
-4. Add a scheduled **reaper** (e.g. aws-nuke on a tag/age filter) to sweep resources a failed `terraform destroy` leaks.
+A **single** AWS account holds three environments — `testing`, `staging`,
+`production` — separated by the **`environment` resource tag** (ABAC), not by
+account. Each has an IAM role (`terraform-<env>`) that may only touch resources
+tagged `environment=<env>`.
 
-> The OIDC role itself is foundational infra both factories need. It is the natural **first requirement-driven module** (`modules/private/oidc-github` or similar) once deploy work begins — until then, provision it by hand (a `wizard` is a good fit).
+Create them **once, by hand, with admin credentials**, via the bootstrap root
+module:
+
+```bash
+cd modules/private/github-oidc
+terraform init
+terraform apply            # add -var=create_oidc_provider=false if the provider exists
+terraform output role_arns
+```
+
+This creates the GitHub OIDC provider and the three roles, each with a trust
+policy constrained to the right repo/branch subject (see that module's
+[`README.md`](../../modules/private/github-oidc/README.md)). Then set the
+**testing** role ARN as `AWS_TESTING_ROLE_ARN` (the wizard does this); wire
+**staging** / **production** to the app repo when its deploy tier lands.
+
+> Resources a run creates MUST be tagged `environment=<env>` or the role denies the
+> call. Add a scheduled **reaper** (e.g. aws-nuke on a tag/age filter) to sweep
+> anything a failed `terraform destroy` leaks.
 
 ## Operating the pipeline
 
 - **Start work**: open an issue. A collaborator-opened issue auto-gets `agent:explore`; otherwise add the label by hand.
 - **Flow**: explore (verdict) → `agent:implement` (draft PR) → `agent:review` (fixes + marks ready) → **human merge**.
-- **Real-apply e2e**: add the `run-e2e` label to a PR when a change needs real-deploy validation. It applies in the sandbox, asserts, destroys, and comments the outcome.
+- **Real-apply e2e**: add the `run-e2e` label to a PR when a change needs real-deploy validation. It applies in testing, asserts, destroys, and comments the outcome.
 - **Rebase**: PRs are rebased daily; force one with the `agent:rebase` label.
 - **Release a module version**: merge to main, then cut a repo-wide tag: `git tag vX.Y.Z && git push --tags`. Consumers bump their `?ref=`.
 

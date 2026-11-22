@@ -31,6 +31,20 @@ Always pin `?ref=` to a release **tag**. Never point a consumer at `modules/priv
 Factory, brakes, and test harness are in place; **no real modules yet** — the first
 `modules/public/app` composition lands when the app repo raises a requirement.
 
+## Local development
+
+Install the brake toolchain and activate the pre-commit hook once, so `git commit`
+runs the same checks as CI:
+
+```bash
+./scripts/dev-setup.sh
+```
+
+It installs Terraform/tflint/Checkov/pre-commit as needed (via the repo-local
+public-PyPI config in `.config/pip/`, not any corporate proxy) and runs
+`pre-commit install`. After that, commits run fmt/validate/tflint/Checkov/gitleaks
++ native `terraform test` locally — before anything reaches CI.
+
 ## Agent skills
 
 Shared skills are loaded at CI time from the home repo at the pinned `skills-lock.json`

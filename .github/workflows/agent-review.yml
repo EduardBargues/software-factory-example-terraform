@@ -27,6 +27,7 @@ jobs:
     env:
       PR_NUMBER: ${{ github.event.pull_request.number }}
       HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      PIP_CONFIG_FILE: ${{ github.workspace }}/.config/pip/pip.conf
     steps:
       - name: Authorize the labeler
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7

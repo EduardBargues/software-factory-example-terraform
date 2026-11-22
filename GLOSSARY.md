@@ -17,7 +17,10 @@ Repo-specific vocabulary for `software-factory-example-terraform`. Shared factor
 - **Mock provider** — a Terraform test provider returning synthetic data instead of calling the cloud API; no resources created, no creds.
 - **Terratest** — the Go (`test/*_test.go`) framework (Gruntwork) that `apply`s an example against real AWS, asserts real behavior via the AWS SDK, and `defer`s destroy. Runs on-demand, not per-PR by default.
 - **`run-e2e`** — the PR label that triggers the on-demand real-apply e2e run.
-- **Sandbox account** — the dedicated, isolated AWS account ephemeral applies run in, never prod/staging.
+- **Environment** — one of `testing`, `staging`, `production`: the AWS resources tagged `environment=<name>` plus the IAM role (`terraform-<name>`) permitted — via ABAC — to touch only those. A single AWS account holds all three; the tag is the boundary (no separate accounts). _Avoid: sandbox._
+- **testing** — where `run-e2e` applies ephemerally (apply → assert → destroy); no persistent resources.
+- **staging** — where the app deploys on a PR (on-demand) and just after merging to main, before production.
+- **production** — where the app deploys after staging.
 - **Reaper** — a scheduled sweep that destroys resources leaked by a failed `destroy`.
 
 ## IaC brakes

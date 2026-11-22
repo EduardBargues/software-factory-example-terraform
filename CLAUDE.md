@@ -26,7 +26,7 @@ Consumers pin `git::https://github.com/EduardBargues/software-factory-example-te
 ## Brakes & testing
 
 - **Per-PR (no cloud creds):** `terraform fmt -check`, `terraform validate`, `tflint`, **Checkov**, `gitleaks`, and native `terraform test` with `mock_provider`.
-- **On-demand e2e (PR label `run-e2e`):** real **ephemeral apply** of `examples/` + **Terratest** assertions against live resources, then `destroy` — in a dedicated sandbox AWS account via OIDC short-lived creds. Never a merge gate by default; never nightly.
+- **On-demand e2e (PR label `run-e2e`):** real **ephemeral apply** of `examples/` + **Terratest** assertions against live resources, then `destroy` — in the testing environment (resources tagged `environment=testing`) via OIDC short-lived creds. Never a merge gate by default; never nightly.
 
 ## Working agreement
 
