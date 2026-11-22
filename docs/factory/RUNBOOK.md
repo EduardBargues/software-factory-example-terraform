@@ -1,24 +1,23 @@
-# RUNBOOK — operate, set up, and debug the Terraform factory
+# RUNBOOK — operate and debug the Terraform factory
+
+How to run and debug *this* factory. **Standing up the repo** (labels, secrets,
+Anthropic WIF, branch protection, smoke test) is the same for every factory repo —
+follow the hub's [**NEW-REPO-CHECKLIST**](https://github.com/EduardBargues/software-factory-example-home-repo/blob/main/docs/factory/NEW-REPO-CHECKLIST.md).
 
 ## Prerequisites (local dev)
 
-- **Terraform** >= 1.7 (for `mock_provider` in native tests), **tflint**, **Checkov**, **pre-commit**, and **Go** >= 1.26 (for Terratest).
-- Install the hooks: `pre-commit install` then `pre-commit run --all-files`.
-- Keep hooks current: `pre-commit autoupdate` (and verify the `antonbabenko/pre-commit-terraform` rev).
+Run **`./scripts/dev-setup.sh`** once — it installs the brake toolchain (Terraform
+>= 1.7, tflint, Checkov, pre-commit; Go >= 1.26 for Terratest) and activates the
+pre-commit hook. Keep hooks current with `pre-commit autoupdate` (verify the
+`antonbabenko/pre-commit-terraform` rev).
 
-## Secrets & variables (GitHub repo settings)
+## Secrets (repo-specific)
 
-Set these once the repo is on GitHub (Phase D). **No long-lived cloud keys** — AWS access is OIDC-only.
-
-**Secrets**
-
-- `FACTORY_PAT` — fine-grained, single-repo, expiring PAT. Lets tasks apply labels / open PRs so downstream workflows fire (the built-in `GITHUB_TOKEN` can't).
-- `ANTHROPIC_FEDERATION_RULE_ID`, `ANTHROPIC_ORGANIZATION_ID`, `ANTHROPIC_SERVICE_ACCOUNT_ID`, `ANTHROPIC_WORKSPACE_ID` — Anthropic WIF identifiers (not credentials; useless without a valid GitHub OIDC token from this repo).
-- `AWS_TESTING_ROLE_ARN` — the IAM role `run-e2e` assumes via OIDC (may only touch resources tagged environment=testing).
-
-**Variables**
-
-- `AWS_TESTING_REGION` — region for ephemeral e2e (defaults to `eu-west-1`).
+The generic factory secrets (`FACTORY_PAT`, the Anthropic WIF ids) are in the
+checklist above; `scripts/setup-terraform-secrets.sh` automates them. **This** repo
+also needs the AWS testing role for `run-e2e`: `AWS_TESTING_ROLE_ARN` (secret) and
+`AWS_TESTING_REGION` (variable), produced by the bootstrap below. No long-lived
+cloud keys — AWS is OIDC-only.
 
 ## Environments & OIDC roles (for run-e2e and deploy)
 
@@ -70,4 +69,3 @@ Run `/retro` after a run that went wrong. Route each finding to a **check** (tfl
 
 - Pin the third-party setup actions (`hashicorp/setup-terraform`, `terraform-linters/setup-tflint`, `actions/setup-python`, `actions/setup-go`, `aws-actions/configure-aws-credentials`) to full commit SHAs, matching how `checkout`/`github-script` are pinned.
 - Move the `skills-lock.json` pin from the bootstrap home-repo SHA to a released home-repo **tag**.
-- Turn on branch protection (require the `brakes` check; require a human review).
