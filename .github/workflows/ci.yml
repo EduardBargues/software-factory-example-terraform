@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 # Make pip (pre-commit's python hooks + Checkov) use the repo-local public-PyPI
-# config instead of any corporate proxy with an expiring token.
+# config instead of any token-gated private index.
 env:
   PIP_CONFIG_FILE: ${{ github.workspace }}/.config/pip/pip.conf
 
