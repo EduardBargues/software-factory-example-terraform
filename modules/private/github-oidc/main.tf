@@ -83,60 +83,49 @@ resource "aws_iam_role" "env" {
   }
 }
 
+# Writes/creates: ADMIN (Action "*") but gated by the `environment` tag, so each
+# role can manage ANY resource type — as long as it's tagged (or tagged on create)
+# for its own environment. No per-service maintenance.
+#
+# LIMITATION (inherent to single-account tag ABAC): a mutating action is allowed
+# only where AWS supports the tag condition key. Resource types that can't be
+# tagged on create (no `aws:RequestTag`) or don't honor `aws:ResourceTag` will be
+# denied — add a narrow exception for those, or split environments into separate
+# accounts for a hard boundary. Every resource a run creates MUST carry
+# tags = { environment = "<env>" } or the create is denied.
 resource "aws_iam_role_policy" "env" {
   for_each = var.environments
 
-  name = "abac-${each.key}"
+  name = "admin-${each.key}"
   role = aws_iam_role.env[each.key].id
 
-  # STARTER ABAC policy — validate and tighten per the services your modules
-  # actually use. The `environment` tag is the ONLY boundary here (single
-  # account), so correctness matters: every resource a run creates MUST carry
-  # tags = { environment = "<env>" } or the run will be denied.
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "ReadOnlyDiscovery"
-        Effect = "Allow"
-        Action = [
-          "lambda:Get*", "lambda:List*",
-          "dynamodb:Describe*", "dynamodb:List*",
-          "events:Describe*", "events:List*",
-          "logs:Describe*", "logs:Get*", "logs:List*",
-          "iam:Get*", "iam:List*",
-          "sts:GetCallerIdentity",
-        ]
-        Resource = "*"
-      },
-      {
-        Sid       = "MutateResourcesTaggedForThisEnv"
+        Sid       = "AdminOnResourcesTaggedForThisEnv"
         Effect    = "Allow"
-        Action    = ["lambda:*", "dynamodb:*", "events:*", "logs:*"]
+        Action    = "*"
         Resource  = "*"
         Condition = { StringEquals = { "aws:ResourceTag/environment" = each.key } }
       },
       {
-        Sid       = "CreateOnlyWhenTaggedForThisEnv"
+        Sid       = "AdminCreateWhenTaggingForThisEnv"
         Effect    = "Allow"
-        Action    = ["lambda:*", "dynamodb:*", "events:*", "logs:*"]
+        Action    = "*"
         Resource  = "*"
         Condition = { StringEquals = { "aws:RequestTag/environment" = each.key } }
       },
-      {
-        Sid    = "IamForFunctionExecutionRole"
-        Effect = "Allow"
-        Action = [
-          "iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:PassRole",
-          "iam:AttachRolePolicy", "iam:DetachRolePolicy",
-          "iam:PutRolePolicy", "iam:DeleteRolePolicy",
-          "iam:TagRole", "iam:UntagRole",
-          "iam:ListRolePolicies", "iam:ListAttachedRolePolicies",
-        ]
-        # Scope IAM to a per-env role-name prefix; your modules must name the
-        # function's execution role "<env>-...".
-        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${each.key}-*"
-      },
     ]
   })
+}
+
+# Reads/plan: Terraform must refresh state, and most read actions can't be
+# tag-gated. Attach AWS's managed ReadOnlyAccess (AWS keeps it current) so plan
+# works across services. Reads are account-wide (not tag-scoped) but non-mutating.
+resource "aws_iam_role_policy_attachment" "readonly" {
+  for_each = var.environments
+
+  role       = aws_iam_role.env[each.key].name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
 }

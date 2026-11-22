@@ -68,26 +68,32 @@ terraform output role_arns
 terraform -chdir=modules/private/github-oidc output -json role_arns   # all three ARNs
 ```
 
-## The ABAC boundary — read this
+## The permission model — read this
 
-The tag is the ONLY thing separating environments in one account, so:
+Each role has **admin within its environment**: an inline policy allowing
+`Action: "*"` gated by the `environment` tag (writes + tag-on-create), plus AWS's
+managed **`ReadOnlyAccess`** so Terraform can plan/refresh. No per-service list to
+maintain — any resource type works, as long as it's tagged for the environment.
 
-- **Every resource a run creates must be tagged `environment = <env>`.** The
-  create permission is conditioned on `aws:RequestTag/environment`, so an untagged
-  `terraform apply` will be **denied**. In your modules, set
-  `tags = { environment = var.environment }` on everything (or use the AWS
-  provider's `default_tags`).
-- Name each Lambda **execution role** with the env prefix (`testing-...`,
-  `production-...`) — the IAM statement is scoped to `role/<env>-*`.
-- The starter policy covers `lambda`, `dynamodb`, `events`, `logs`, and IAM for
-  the function role. **Validate and extend** it per the services your modules
-  actually use — ABAC coverage differs by service/action.
+- **Every resource a run creates must be tagged `environment = <env>`.** Creates are
+  gated by `aws:RequestTag/environment`; writes/deletes by `aws:ResourceTag/environment`.
+  In your modules set `tags = { environment = var.environment }` on everything (or use
+  the AWS provider's `default_tags`). An untagged create is **denied**.
+- **Inherent limitation:** tag ABAC only works where AWS supports the tag condition
+  key. Resource types that can't be tagged on create, or don't honor `aws:ResourceTag`,
+  are **denied** on mutation — add a narrow exception for those, or split environments
+  into separate accounts for a hard boundary.
+- **Reads are account-wide** (`ReadOnlyAccess` isn't tag-scoped) — non-mutating, but a
+  role can *read* other environments' resources. Fine in a single account; use separate
+  accounts if you need read isolation too.
+- This is deliberately broad (admin-within-env) for flexibility, not least-privilege.
+  Tighten a given environment (especially **production**) if it warrants it.
 
 ## Trust mapping (defaults, edit in `variables.tf`)
 
-- **testing** — trusted by both repos (either can run e2e), subject `…:*`.
-- **production** — trusted only by the app repo's **main** branch
-  (`…:ref:refs/heads/main`).
+- **testing** — trusted by this repo's `run-e2e` (subject `…:*`).
+- **staging** — trusted by the app repo on a PR (`…:pull_request`) and on `main`.
+- **production** — trusted by the app repo's **main** only (`…:ref:refs/heads/main`).
 
 Subjects use GitHub's immutable-subject format
 (`repo:<owner>@<owner_id>/<repo>@<repo_id>:…`), which both repos already emit.
