@@ -5,7 +5,7 @@
 # local `git commit` runs the same checks CI does. Idempotent — safe to re-run.
 #
 # Package installs use the repo-local public-PyPI config (.config/pip/pip.conf),
-# so a corporate pip proxy with an expiring token can't block them.
+# so a token-gated private pip index can't block them.
 #
 #   ./scripts/dev-setup.sh
 set -euo pipefail

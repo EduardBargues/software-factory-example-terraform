@@ -1,8 +1,8 @@
 # software-factory-example-terraform
 
 A Terraform **module library**, built and tested by its own software factory — the
-infrastructure half of a multi-repo [home-repo-pattern](https://www.aihero.dev/the-home-repo-pattern)
-setup. It exposes **one public module** (`modules/public/app`) consumed by
+infrastructure half of a multi-repo software-factory setup. It exposes **one public
+module** (`modules/public/app`) consumed by
 [`software-factory-example-python`](https://github.com/EduardBargues/software-factory-example-python),
 over private internals. It owns no persistent infrastructure — it only applies
 **ephemerally** to test modules, then destroys them.
@@ -41,7 +41,7 @@ runs the same checks as CI:
 ```
 
 It installs Terraform/tflint/Checkov/pre-commit as needed (via the repo-local
-public-PyPI config in `.config/pip/`, not any corporate proxy) and runs
+public-PyPI config in `.config/pip/`, not a token-gated private index) and runs
 `pre-commit install`. After that, commits run fmt/validate/tflint/Checkov/gitleaks
 + native `terraform test` locally — before anything reaches CI.
 
