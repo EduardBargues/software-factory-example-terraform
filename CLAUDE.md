@@ -6,27 +6,23 @@ Read these before proposing changes, and use their terms exactly:
 
 - [`GLOSSARY.md`](GLOSSARY.md) — this repo's vocabulary (shared factory terms live in the home repo).
 - [`docs/adr/`](docs/adr/) — Architecture Decision Records (start with [`0001`](docs/adr/0001-public-private-module-contract.md)).
-- [`docs/factory/SPEC.md`](docs/factory/SPEC.md) — the factory for this repo (to be scaffolded).
-- Shared vocabulary & skills: the **home repo** (`../software-factory-example-home-repo`).
+- [`docs/factory/SPEC.md`](docs/factory/SPEC.md) — the factory (pipeline, brakes, testing).
+- [`docs/factory/RUNBOOK.md`](docs/factory/RUNBOOK.md) — operate & debug this factory.
 
-## Module layout
+## The multi-repo factory
 
-```
-modules/
-├── public/
-│   └── app/          ← the ONLY consumable module; the supported contract
-└── private/
-    ├── lambda/
-    ├── dynamodb/
-    └── eventbridge/  ← internal; composed by public/app via ../../private/<name>
-```
+Part of a three-repo setup (home-repo ADR-0001):
 
-Consumers pin `git::https://github.com/EduardBargues/software-factory-example-terraform.git//modules/public/app?ref=vX.Y.Z`. Never point a consumer at `modules/private/*`.
+- **Hub** — [`software-factory-example-home-repo`](https://github.com/EduardBargues/software-factory-example-home-repo) (`../software-factory-example-home-repo`; clone if missing). **Read its `CLAUDE.md` to understand — or answer questions about — the whole factory** (brakes, accelerators, topology). Shared skills/vocab/reusable-workflows live there, pinned by tag.
+- **Consumed by** [`software-factory-example-python`](https://github.com/EduardBargues/software-factory-example-python) — the app repo pins this repo's `modules/public/app` at a tag.
+
+## Module contract
+
+One public module (`modules/public/app`) over private internals; consumers pin a tagged `git::…//modules/public/app?ref=` source and never reference `modules/private/*`. See [`docs/adr/0001`](docs/adr/0001-public-private-module-contract.md) + the module READMEs.
 
 ## Brakes & testing
 
-- **Per-PR (no cloud creds):** `terraform fmt -check`, `terraform validate`, `tflint`, **Checkov**, `gitleaks`, and native `terraform test` with `mock_provider`.
-- **On-demand e2e (PR label `run-e2e`):** real **ephemeral apply** of `examples/` + **Terratest** assertions against live resources, then `destroy` — in the testing environment (resources tagged `environment=testing`) via OIDC short-lived creds. Never a merge gate by default; never nightly.
+Defined in [`.pre-commit-config.yaml`](.pre-commit-config.yaml) + [`.github/workflows/ci.yml`](.github/workflows/ci.yml) (per-PR, no cloud creds) and [`.github/workflows/run-e2e.yml`](.github/workflows/run-e2e.yml) (on-demand real-apply e2e; PR label `run-e2e`). Vocabulary: [`GLOSSARY.md`](GLOSSARY.md).
 
 ## Working agreement
 
