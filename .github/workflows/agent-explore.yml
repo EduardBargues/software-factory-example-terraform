@@ -23,10 +23,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  explore:
+  # Gate: authorize the labeler AND skip if the ticket has an open (cross-repo)
+  # blocker (ADR-0004). explore runs only when this passes, so a blocked ticket
+  # never explores or auto-chains.
+  gate:
     if: github.event.label.name == 'agent:explore'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
     steps:
       - name: Authorize the labeler
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
@@ -42,6 +47,32 @@ jobs:
               core.setFailed(`${actor} lacks triage+ permission; refusing to run the factory.`);
             }
 
+      # Respect cross-repo blocking (ADR-0004): native dependencies span repos, so a
+      # blocker in the app repo counts. Skip + comment; a human pulls the frontier
+      # (re-applies agent:explore) once the blocker closes.
+      - name: Skip if the ticket has open blockers
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          open_blockers=$(gh issue view "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --json blockedBy --jq '[.blockedBy.nodes[] | select(.state=="OPEN")] | length' 2>/dev/null || echo 0)
+          echo "open blockers: ${open_blockers:-0}"
+          if [ "${open_blockers:-0}" -gt 0 ]; then
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
+              --body "⛔ Blocked by ${open_blockers} open issue(s) — explore skipped. Re-apply \`agent:explore\` once they close (pull the frontier)."
+          else
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  explore:
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 1

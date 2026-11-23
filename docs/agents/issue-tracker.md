@@ -27,3 +27,13 @@ File issues only into this repo. In a fork, `gh` can default to the upstream par
 ## When a skill says "publish to the issue tracker"
 
 Create a GitHub issue. When a skill says "fetch the relevant ticket", read it as in **Read an issue** above.
+
+## Wayfinding & cross-repo
+
+Used by `/wayfinder`. A **map** (`wayfinder:map` issue) holds the plan; **child tickets** are sub-issues, **blocking** uses native dependencies, the **frontier** is the open, unblocked, unassigned children. Full model: the `wayfinder` skill.
+
+This repo's tickets are usually **children/blockers of a map in the app repo** (home-repo ADR-0004). Cross-repo edges are native (same owner) but driven via `gh`/API with **issue URLs**, not the web picker:
+
+- **Cross-repo child**: `gh issue create -R OWNER/software-factory-example-terraform --parent <map-url>`.
+- **Cross-repo blocking**: `gh issue edit <blocked-url> --add-blocked-by <this-repo-blocker-url>` (e.g. an app ticket blocked by a module ticket here).
+- **Count open blockers** (spans repos): `gh issue view <n> --json blockedBy --jq '[.blockedBy.nodes[]|select(.state=="OPEN")]|length'`.
