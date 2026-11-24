@@ -18,5 +18,5 @@ jobs:
   rebase:
     # Scheduled/manual runs rebase all PRs; a labeled run fires only for agent:rebase.
     if: github.event_name != 'pull_request' || github.event.label.name == 'agent:rebase'
-    uses: EduardBargues/software-factory-example-home-repo/.github/workflows/morning-rebase.yml@v0.1.0
+    uses: EduardBargues/software-factory-example-home-repo/.github/workflows/morning-rebase.yml@v0
     secrets: inherit
