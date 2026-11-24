@@ -12,5 +12,5 @@ permissions:
 
 jobs:
   gate:
-    uses: EduardBargues/software-factory-example-home-repo/.github/workflows/auto-label.yml@v0.1.0
+    uses: EduardBargues/software-factory-example-home-repo/.github/workflows/auto-label.yml@v0
     secrets: inherit

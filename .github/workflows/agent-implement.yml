@@ -56,7 +56,7 @@ jobs:
           echo "BASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           git switch -c "$BRANCH"
 
-      - uses: EduardBargues/software-factory-example-home-repo/.github/actions/load-shared-skills@v0.1.0
+      - uses: EduardBargues/software-factory-example-home-repo/.github/actions/load-shared-skills@v0
 
       - name: Install the brakes (so the agent commits through pre-commit)
         uses: ./.github/actions/setup-iac-brakes
@@ -79,7 +79,7 @@ jobs:
 
       - name: Implement
         id: implement
-        uses: EduardBargues/software-factory-example-home-repo/.github/actions/run-agent@v0.1.0
+        uses: EduardBargues/software-factory-example-home-repo/.github/actions/run-agent@v0
         with:
           federation-rule-id: ${{ secrets.ANTHROPIC_FEDERATION_RULE_ID }}
           organization-id: ${{ secrets.ANTHROPIC_ORGANIZATION_ID }}
