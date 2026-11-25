@@ -103,7 +103,7 @@ jobs:
           organization-id: ${{ secrets.ANTHROPIC_ORGANIZATION_ID }}
           service-account-id: ${{ secrets.ANTHROPIC_SERVICE_ACCOUNT_ID }}
           workspace-id: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
-          model: claude-sonnet-4-6
+          model: claude-haiku-4-5-20251001
           prompt: |
             You are the EXPLORE task of a software factory for a Terraform module library. You run READ-ONLY and never write code.
 
